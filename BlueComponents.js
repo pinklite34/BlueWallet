@@ -1,5 +1,4 @@
 /* eslint react/prop-types: 0 */
-/* global alert */
 /** @type {AppStorage} */
 import React, { Component } from 'react';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -18,6 +17,7 @@ import {
   Image,
   Keyboard,
   SafeAreaView,
+  InteractionManager,
   InputAccessoryView,
   Clipboard,
   Platform,
@@ -28,12 +28,11 @@ import { LightningCustodianWallet } from './class';
 import Carousel from 'react-native-snap-carousel';
 import { BitcoinUnit } from './models/bitcoinUnits';
 import NavigationService from './NavigationService';
-import ImagePicker from 'react-native-image-picker';
 import WalletGradient from './class/walletGradient';
 import ToolTip from 'react-native-tooltip';
 import { BlurView } from '@react-native-community/blur';
 import showPopupMenu from 'react-native-popup-menu-android';
-const LocalQRCode = require('@remobile/react-native-qrcode-local-image');
+import NetworkTransactionFees, { NetworkTransactionFeeType } from './models/networkTransactionFees';
 let loc = require('./loc/');
 /** @type {AppStorage} */
 let BlueApp = require('./BlueApp');
@@ -102,7 +101,6 @@ export class BitcoinButton extends Component {
             borderRadius: 5,
             backgroundColor: (this.props.active && BlueApp.settings.hdbackgroundColor) || BlueApp.settings.brandingColor,
             // eslint-disable-next-line
-            width: this.props.style.width,
             minWidth: this.props.style.width,
             // eslint-disable-next-line
             minHeight: this.props.style.height,
@@ -140,7 +138,6 @@ export class LightningButton extends Component {
             borderRadius: 5,
             backgroundColor: (this.props.active && BlueApp.settings.lnbackgroundColor) || BlueApp.settings.brandingColor,
             // eslint-disable-next-line
-            width: this.props.style.width,
             minWidth: this.props.style.width,
             // eslint-disable-next-line
             minHeight: this.props.style.height,
@@ -237,6 +234,10 @@ export class BlueWalletNavigationHeader extends Component {
     });
   }
 
+  manageFundsPressed = () => {
+    this.props.onManageFundsPressed();
+  };
+
   render() {
     return (
       <LinearGradient
@@ -303,7 +304,7 @@ export class BlueWalletNavigationHeader extends Component {
           )}
         </TouchableOpacity>
         {this.state.wallet.type === LightningCustodianWallet.type && (
-          <TouchableOpacity onPress={() => this.props.navigation.navigate('ManageFunds', { fromWallet: this.state.wallet })}>
+          <TouchableOpacity onPress={this.manageFundsPressed}>
             <View
               style={{
                 marginTop: 14,
@@ -377,6 +378,36 @@ export const BlueNavigationStyle = (navigation, withNavigationCloseButton = fals
       }
     >
       <Image style={{ alignSelf: 'center' }} source={require('./img/close.png')} />
+    </TouchableOpacity>
+  ) : null,
+  headerBackTitle: null,
+});
+
+export const BlueCreateTxNavigationStyle = (navigation, withAdvancedOptionsMenuButton = false, advancedOptionsMenuButtonAction) => ({
+  headerStyle: {
+    backgroundColor: BlueApp.settings.brandingColor,
+    borderBottomWidth: 0,
+    elevation: 0,
+  },
+  headerTitleStyle: {
+    fontWeight: '600',
+    color: BlueApp.settings.foregroundColor,
+  },
+  headerTintColor: BlueApp.settings.foregroundColor,
+  headerLeft: (
+    <TouchableOpacity
+      style={{ minWwidth: 40, height: 40, padding: 14 }}
+      onPress={() => {
+        Keyboard.dismiss();
+        navigation.goBack(null);
+      }}
+    >
+      <Image style={{ alignSelf: 'center' }} source={require('./img/close.png')} />
+    </TouchableOpacity>
+  ),
+  headerRight: withAdvancedOptionsMenuButton ? (
+    <TouchableOpacity style={{ minWidth: 40, height: 40, padding: 14 }} onPress={advancedOptionsMenuButtonAction}>
+      <Icon size={22} name="kebab-horizontal" type="octicon" color={BlueApp.settings.foregroundColor} />
     </TouchableOpacity>
   ) : null,
   headerBackTitle: null,
@@ -561,10 +592,6 @@ export class BlueFormMultiInput extends Component {
     };
   }
 
-  onSelectionChange = ({ nativeEvent: { selection, text } }) => {
-    this.setState({ selection: { start: selection.end, end: selection.end } });
-  };
-
   render() {
     return (
       <TextInput
@@ -587,8 +614,6 @@ export class BlueFormMultiInput extends Component {
         spellCheck={false}
         {...this.props}
         selectTextOnFocus={false}
-        onSelectionChange={this.onSelectionChange}
-        selection={this.state.selection}
         keyboardType={Platform.OS === 'android' ? 'visible-password' : 'default'}
       />
     );
@@ -821,7 +846,7 @@ export class BlueUseAllFundsButton extends Component {
           <BlueButtonLink
             style={{ paddingRight: 8, paddingLeft: 0, paddingTop: 12, paddingBottom: 12 }}
             title="Done"
-            onPress={Keyboard.dismiss}
+            onPress={() => Keyboard.dismiss()}
           />
         </View>
       </View>
@@ -850,10 +875,44 @@ export class BlueDismissKeyboardInputAccessory extends Component {
             alignItems: 'center',
           }}
         >
-          <BlueButtonLink title="Done" onPress={Keyboard.dismiss} />
+          <BlueButtonLink title="Done" onPress={() => Keyboard.dismiss()} />
         </View>
       </InputAccessoryView>
     );
+  }
+}
+
+export class BlueDoneAndDismissKeyboardInputAccessory extends Component {
+  static InputAccessoryViewID = 'BlueDoneAndDismissKeyboardInputAccessory';
+
+  onPasteTapped = async () => {
+    const clipboard = await Clipboard.getString();
+    this.props.onPasteTapped(clipboard);
+  };
+
+  render() {
+    const inputView = (
+      <View
+        style={{
+          backgroundColor: '#eef0f4',
+          height: 44,
+          flex: 1,
+          flexDirection: 'row',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+        }}
+      >
+        <BlueButtonLink title="Clear" onPress={this.props.onClearTapped} />
+        <BlueButtonLink title="Paste" onPress={this.onPasteTapped} />
+        <BlueButtonLink title="Done" onPress={() => Keyboard.dismiss()} />
+      </View>
+    );
+
+    if (Platform.OS === 'ios') {
+      return <InputAccessoryView nativeID={BlueDoneAndDismissKeyboardInputAccessory.InputAccessoryViewID}>{inputView}</InputAccessoryView>;
+    } else {
+      return <KeyboardAvoidingView style={{ height: 44 }}>{inputView}</KeyboardAvoidingView>;
+    }
   }
 }
 
@@ -990,11 +1049,11 @@ export class BlueTransactionPendingIcon extends Component {
           <View style={stylesBlueIcon.ball}>
             <Icon
               {...this.props}
-              name="ellipsis-h"
+              name="kebab-horizontal"
               size={16}
-              type="font-awesome"
+              type="octicon"
               color={BlueApp.settings.foregroundColor}
-              iconStyle={{ left: 0, top: 6 }}
+              iconStyle={{ left: 0, top: 7 }}
             />
           </View>
         </View>
@@ -1334,6 +1393,8 @@ export class BlueTransactionListItem extends Component {
     itemPriceUnit: BitcoinUnit.BTC,
   };
 
+  state = { transactionTimeToReadable: '...', subtitleNumberOfLines: 1 };
+
   txMemo = () => {
     if (BlueApp.tx_metadata[this.props.item.hash] && BlueApp.tx_metadata[this.props.item.hash]['memo']) {
       return BlueApp.tx_metadata[this.props.item.hash]['memo'];
@@ -1472,7 +1533,7 @@ export class BlueTransactionListItem extends Component {
 
   onPress = () => {
     if (this.props.item.hash) {
-      NavigationService.navigate('TransactionDetails', { hash: this.props.item.hash });
+      NavigationService.navigate('TransactionStatus', { hash: this.props.item.hash });
     } else if (
       this.props.item.type === 'user_invoice' ||
       this.props.item.type === 'payment_request' ||
@@ -1495,13 +1556,28 @@ export class BlueTransactionListItem extends Component {
     }
   };
 
+  componentDidMount() {
+    InteractionManager.runAfterInteractions(() => {
+      const transactionTimeToReadable = loc.transactionTimeToReadable(this.props.item.received);
+      this.setState({ transactionTimeToReadable });
+    });
+  }
+
+  onLongPress = () => {
+    if (this.state.subtitleNumberOfLines === 1) {
+      this.setState({ subtitleNumberOfLines: 0 });
+    }
+  };
+
   render() {
     return (
       <BlueListItem
         avatar={this.avatar()}
-        title={loc.transactionTimeToReadable(this.props.item.received)}
+        title={this.state.transactionTimeToReadable}
         subtitle={this.subtitle()}
+        subtitleNumberOfLines={this.state.subtitleNumberOfLines}
         onPress={this.onPress}
+        onLongPress={this.onLongPress}
         badge={{
           value: 3,
           textStyle: { color: 'orange' },
@@ -1663,7 +1739,7 @@ export class BlueListTransactionItem extends Component {
 
   onPress = () => {
     if (this.props.item.hash) {
-      NavigationService.navigate('TransactionDetails', { hash: this.props.item.hash });
+      NavigationService.navigate('TransactionStatus', { hash: this.props.item.hash });
     } else if (
       this.props.item.type === 'user_invoice' ||
       this.props.item.type === 'payment_request' ||
@@ -1905,43 +1981,21 @@ export class BlueAddressInput extends Component {
           value={this.props.address}
           style={{ flex: 1, marginHorizontal: 8, minHeight: 33 }}
           editable={!this.props.isLoading}
-          onSubmitEditing={Keyboard.dismiss}
+          onSubmitEditing={() => Keyboard.dismiss()}
           {...this.props}
         />
         <TouchableOpacity
           disabled={this.props.isLoading}
           onPress={() => {
+            NavigationService.navigate('ScanQrAddress', { onBarScanned: this.props.onBarScanned });
             Keyboard.dismiss();
-            ImagePicker.showImagePicker(
-              {
-                title: null,
-                mediaType: 'photo',
-                takePhotoButtonTitle: null,
-                customButtons: [{ name: 'navigatetoQRScan', title: 'Use Camera' }],
-              },
-              response => {
-                if (response.customButton) {
-                  NavigationService.navigate('ScanQrAddress', { onBarScanned: this.props.onBarScanned });
-                } else if (response.uri) {
-                  const uri = response.uri.toString().replace('file://', '');
-                  LocalQRCode.decode(uri, (error, result) => {
-                    if (!error) {
-                      this.props.onBarScanned(result);
-                    } else {
-                      alert('The selected image does not contain a QR Code.');
-                    }
-                  });
-                }
-              },
-            );
           }}
           style={{
-            width: 75,
             height: 36,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            backgroundColor: '#bebebe',
+            backgroundColor: '#9AA0AA',
             borderRadius: 4,
             paddingVertical: 4,
             paddingHorizontal: 8,
@@ -1949,8 +2003,134 @@ export class BlueAddressInput extends Component {
           }}
         >
           <Icon name="qrcode" size={22} type="font-awesome" color={BlueApp.settings.inverseForegroundColor} />
-          <Text style={{ color: BlueApp.settings.inverseForegroundColor }}>{loc.send.details.scan}</Text>
+          <Text style={{ marginLeft: 4, color: BlueApp.settings.inverseForegroundColor }}>{loc.send.details.scan}</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+}
+
+export class BlueReplaceFeeSuggestions extends Component {
+  static propTypes = {
+    onFeeSelected: PropTypes.func.isRequired,
+    transactionMinimum: PropTypes.number.isRequired,
+  };
+
+  static defaultProps = {
+    onFeeSelected: undefined,
+    transactionMinimum: 1,
+  };
+
+  state = { networkFees: undefined, selectedFeeType: NetworkTransactionFeeType.FAST, customFeeValue: 0 };
+
+  async componentDidMount() {
+    const networkFees = await NetworkTransactionFees.recommendedFees();
+    this.setState({ networkFees }, () => this.onFeeSelected(NetworkTransactionFeeType.FAST));
+  }
+
+  onFeeSelected = selectedFeeType => {
+    if (selectedFeeType !== NetworkTransactionFeeType.CUSTOM) {
+      Keyboard.dismiss();
+    }
+    if (selectedFeeType === NetworkTransactionFeeType.FAST) {
+      this.props.onFeeSelected(this.state.networkFees.fastestFee);
+      this.setState({ selectedFeeType }, () => this.props.onFeeSelected(this.state.networkFees.fastestFee));
+    } else if (selectedFeeType === NetworkTransactionFeeType.MEDIUM) {
+      this.setState({ selectedFeeType }, () => this.props.onFeeSelected(this.state.networkFees.halfHourFee));
+    } else if (selectedFeeType === NetworkTransactionFeeType.SLOW) {
+      this.setState({ selectedFeeType }, () => this.props.onFeeSelected(this.state.networkFees.hourFee));
+    } else if (selectedFeeType === NetworkTransactionFeeType.CUSTOM) {
+      this.props.onFeeSelected(this.state.customFeeValue);
+    }
+  };
+
+  onCustomFeeTextChange = customFee => {
+    this.setState({ customFeeValue: Number(customFee), selectedFeeType: NetworkTransactionFeeType.CUSTOM }, () => {
+      this.onFeeSelected(NetworkTransactionFeeType.CUSTOM);
+    });
+  };
+
+  render() {
+    return (
+      <View>
+        {this.state.networkFees && (
+          <>
+            <BlueText>Suggestions</BlueText>
+            <TouchableOpacity onPress={() => this.onFeeSelected(NetworkTransactionFeeType.FAST)}>
+              <BlueListItem
+                title={'Fast'}
+                rightTitle={`${this.state.networkFees.fastestFee} sat/b`}
+                {...(this.state.selectedFeeType === NetworkTransactionFeeType.FAST
+                  ? { rightIcon: <Icon name="check" type="font-awesome" color="#0c2550" /> }
+                  : { hideChevron: true })}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => this.onFeeSelected(NetworkTransactionFeeType.MEDIUM)}>
+              <BlueListItem
+                title={'Medium'}
+                rightTitle={`${this.state.networkFees.halfHourFee} sat/b`}
+                {...(this.state.selectedFeeType === NetworkTransactionFeeType.MEDIUM
+                  ? { rightIcon: <Icon name="check" type="font-awesome" color="#0c2550" /> }
+                  : { hideChevron: true })}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => this.onFeeSelected(NetworkTransactionFeeType.SLOW)}>
+              <BlueListItem
+                title={'Slow'}
+                rightTitle={`${this.state.networkFees.hourFee} sat/b`}
+                {...(this.state.selectedFeeType === NetworkTransactionFeeType.SLOW
+                  ? { rightIcon: <Icon name="check" type="font-awesome" color="#0c2550" /> }
+                  : { hideChevron: true })}
+              />
+            </TouchableOpacity>
+          </>
+        )}
+        <TouchableOpacity onPress={() => this.customTextInput.focus()}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginLeft: 18, marginRight: 18, alignItems: 'center' }}>
+            <Text style={{ color: BlueApp.settings.foregroundColor, fontSize: 16, fontWeight: '500' }}>Custom</Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                minHeight: 44,
+                height: 44,
+                minWidth: 48,
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                marginVertical: 8,
+              }}
+            >
+              <TextInput
+                onChangeText={this.onCustomFeeTextChange}
+                keyboardType={'numeric'}
+                value={this.state.customFeeValue}
+                ref={ref => (this.customTextInput = ref)}
+                maxLength={9}
+                style={{
+                  borderColor: '#d2d2d2',
+                  borderBottomColor: '#d2d2d2',
+                  borderWidth: 1.0,
+                  borderBottomWidth: 0.5,
+                  borderRadius: 4,
+                  minHeight: 33,
+                  maxWidth: 100,
+                  minWidth: 44,
+                  backgroundColor: '#f5f5f5',
+                  textAlign: 'right',
+                }}
+                onFocus={() => this.onCustomFeeTextChange(this.state.customFeeValue)}
+                defaultValue={`${this.props.transactionMinimum}`}
+                placeholder="Custom sat/b"
+                inputAccessoryViewID={BlueDismissKeyboardInputAccessory.InputAccessoryViewID}
+              />
+              <Text style={{ color: BlueApp.settings.alternativeTextColor, marginHorizontal: 8 }}>sat/b</Text>
+              {this.state.selectedFeeType === NetworkTransactionFeeType.CUSTOM && <Icon name="check" type="font-awesome" color="#0c2550" />}
+            </View>
+            <BlueDismissKeyboardInputAccessory />
+          </View>
+        </TouchableOpacity>
+        <BlueText>
+          The total fee rate (satoshi per byte) you want to pay should be higher than {this.props.transactionMinimum} sat/byte
+        </BlueText>
       </View>
     );
   }
@@ -1983,16 +2163,28 @@ export class BlueBitcoinAmount extends Component {
     return (
       <TouchableWithoutFeedback disabled={this.props.pointerEvents === 'none'} onPress={() => this.textInput.focus()}>
         <View>
-          <View style={{ flexDirection: 'row', justifyContent: 'center', paddingTop: 16, paddingBottom: 16 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', paddingTop: 16, paddingBottom: 2 }}>
             <TextInput
               {...this.props}
               keyboardType="numeric"
               onChangeText={text => {
+                text = text.trim();
                 text = text.replace(',', '.');
+                const split = text.split('.');
+                if (split.length >= 2) {
+                  text = `${parseInt(split[0], 10)}.${split[1]}`;
+                } else {
+                  text = `${parseInt(split[0], 10)}`;
+                }
                 text = this.props.unit === BitcoinUnit.BTC ? text.replace(/[^0-9.]/g, '') : text.replace(/[^0-9]/g, '');
                 text = text.replace(/(\..*)\./g, '$1');
+
                 if (text.startsWith('.')) {
                   text = '0.';
+                }
+                text = text.replace(/(0{1,}.)\./g, '$1');
+                if (this.props.unit !== BitcoinUnit.BTC) {
+                  text = text.replace(/[^0-9.]/g, '');
                 }
                 this.props.onChangeText(text);
               }}

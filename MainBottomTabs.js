@@ -19,11 +19,13 @@ import WalletDetails from './screen/wallets/details';
 import WalletExport from './screen/wallets/export';
 import WalletXpub from './screen/wallets/xpub';
 import BuyBitcoin from './screen/wallets/buyBitcoin';
+import Marketplace from './screen/wallets/marketplace';
 import scanQrWif from './screen/wallets/scanQrWif';
 import ReorderWallets from './screen/wallets/reorderWallets';
 import SelectWallet from './screen/wallets/selectWallet';
 
 import details from './screen/transactions/details';
+import TransactionStatus from './screen/transactions/transactionStatus';
 import rbf from './screen/transactions/RBF';
 import createrbf from './screen/transactions/RBF-create';
 import cpfp from './screen/transactions/CPFP';
@@ -34,12 +36,11 @@ import receiveDetails from './screen/receive/details';
 import setReceiveAmount from './screen/receive/receiveAmount';
 
 import sendDetails from './screen/send/details';
-import sendScanQrAddress from './screen/send/scanQrAddress';
+import ScanQRCode from './screen/send/scanQrAddress';
 import sendCreate from './screen/send/create';
 import Confirm from './screen/send/confirm';
 import Success from './screen/send/success';
 
-import ManageFunds from './screen/lnd/manageFunds';
 import ScanLndInvoice from './screen/lnd/scanLndInvoice';
 import LappBrowser from './screen/lnd/browser';
 import LNDCreateInvoice from './screen/lnd/lndCreateInvoice';
@@ -60,6 +61,9 @@ const WalletsStackNavigator = createStackNavigator(
     },
     WalletTransactions: {
       screen: WalletTransactions,
+    },
+    TransactionStatus: {
+      screen: TransactionStatus,
     },
     TransactionDetails: {
       screen: details,
@@ -162,20 +166,8 @@ const CreateTransactionStackNavigator = createStackNavigator({
   },
   SelectWallet: {
     screen: SelectWallet,
-  },
-});
-
-const ManageFundsStackNavigator = createStackNavigator({
-  ManageFunds: {
-    screen: ManageFunds,
-  },
-  SelectWallet: {
-    screen: SelectWallet,
-  },
-  SendDetails: {
-    screen: CreateTransactionStackNavigator,
     navigationOptions: {
-      header: null,
+      headerRight: null,
     },
   },
 });
@@ -212,6 +204,9 @@ const LightningScanInvoiceStackNavigator = createStackNavigator({
   },
   SelectWallet: {
     screen: SelectWallet,
+    navigationOptions: {
+      headerRight: null,
+    },
   },
   Success: {
     screen: Success,
@@ -245,11 +240,20 @@ const MainBottomTabs = createStackNavigator(
     BuyBitcoin: {
       screen: BuyBitcoin,
     },
+    Marketplace: {
+      screen: Marketplace,
+    },
     //
     SendDetails: {
       screen: CreateTransactionStackNavigator,
       navigationOptions: {
         header: null,
+      },
+    },
+    SelectWallet: {
+      screen: SelectWallet,
+      navigationOptions: {
+        headerLeft: null,
       },
     },
 
@@ -267,12 +271,6 @@ const MainBottomTabs = createStackNavigator(
 
     // LND:
 
-    ManageFunds: {
-      screen: ManageFundsStackNavigator,
-      navigationOptions: {
-        header: null,
-      },
-    },
     ScanLndInvoice: {
       screen: LightningScanInvoiceStackNavigator,
       navigationOptions: {
@@ -280,7 +278,7 @@ const MainBottomTabs = createStackNavigator(
       },
     },
     ScanQrAddress: {
-      screen: sendScanQrAddress,
+      screen: ScanQRCode,
     },
     LappBrowser: {
       screen: LappBrowser,
